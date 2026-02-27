@@ -1,39 +1,59 @@
-import cv2 
+import cv2
+from ultralytics import YOLO
 
+# -------- Load YOLO Model --------
+model = YOLO("yolov8n.pt")   # nano version (fastest)
+
+# -------- Camera --------
 cap = cv2.VideoCapture(0)
 
-#*Tracker Types. More Info:- https://ehsangazar.com/object-tracking-with-opencv-fd18ccdd7369
-tracker_types = {
-    'BOOSTING':cv2.TrackerBoosting_create,
-    'MIL':cv2.TrackerMIL_create,
-    'TLD':cv2.TrackerTLD_create,
-    'MEDIANFLOW':cv2.TrackerMedianFlow_create,
-    'CSRT':cv2.TrackerCSRT_create,      #* Slower but more accurate
-    'MOSSE':cv2.TrackerMOSSE_create
-}
+if not cap.isOpened():
+    print("Camera not detected")
+    exit()
 
-trackers = cv2.MultiTracker_create()
+print("Object Detection Started")
+print("Press Q to quit")
 
 while True:
-    timer = cv2.getTickCount()
-    success,img = cap.read()
-
-    success,bbox = trackers.update(img)
-    if success:
-        for box in bbox:
-            x,y,w,h = [int(v) for v in box]
-            cv2.rectangle(img,(x,y),(x+w,y+h),(255,0,0),4)
-    else:
-        cv2.putText(img,'Object Lost',(75,75),cv2.FONT_HERSHEY_COMPLEX,0.7,(255,0,0),2)    
-    fps = cv2.getTickFrequency()/(cv2.getTickCount()-timer)
-
-    cv2.putText(img,str(int(fps)),(75,50),cv2.FONT_HERSHEY_COMPLEX,0.7,(255,0,0),2)
-    cv2.imshow('Tracking',img)
-    key = cv2.waitKey(1) & 0xff
-    if key==ord('s'):
-        box = cv2.selectROI("Tracking", img,False)
-        #*To run below code please install:- pip install opencv-contrib-python==4.2.0.34
-        tracker = tracker_types['MOSSE']()
-        trackers.add(tracker, img, box)
-    if key==ord('q'):
+    success, frame = cap.read()
+    if not success:
         break
+
+    frame = cv2.flip(frame, 1)
+
+    # -------- YOLO Detection --------
+    results = model(frame, stream=True)
+
+    for r in results:
+        boxes = r.boxes
+        for box in boxes:
+
+            # Bounding Box
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
+
+            # Confidence
+            conf = float(box.conf[0])
+
+            # Class Name
+            cls = int(box.cls[0])
+            label = model.names[cls]
+
+            # Draw Rectangle
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+            # Put Label
+            cv2.putText(frame,
+                        f"{label} {conf:.2f}",
+                        (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.6,
+                        (0, 255, 0),
+                        2)
+
+    cv2.imshow("YOLO Object Detection", frame)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()

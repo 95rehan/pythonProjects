@@ -1,43 +1,118 @@
-import dlib 
-import cv2 
+import cv2
+import mediapipe as mp
 from math import hypot
-import numpy as np 
+import numpy as np
+import os
+import time
 
-detector = dlib.get_frontal_face_detector()
-predictor = dlib.shape_predictor('Eye Blink Detection/shape_predictor_68_face_landmarks.dat')
-
+# -------- Camera --------
 cap = cv2.VideoCapture(0)
+if not cap.isOpened():
+    print("Camera not detected")
+    exit()
 
-def midpoint(p1,p2):
-    return int((p1.x + p2.x)/2), int((p1.y + p2.y)/2)
+# -------- MediaPipe --------
+mp_face_mesh = mp.solutions.face_mesh
+face_mesh = mp_face_mesh.FaceMesh(
+    max_num_faces=1,
+    refine_landmarks=True,
+    min_detection_confidence=0.7,
+    min_tracking_confidence=0.7
+)
 
-def get_blinking_ratio(eye_points,facial_landmarks):
-    left_point = facial_landmarks.part(eye_points[0]).x, facial_landmarks.part(eye_points[0]).y
-    right_point = facial_landmarks.part(eye_points[3]).x , facial_landmarks.part(eye_points[3]).y 
-    center_top = midpoint(facial_landmarks.part(eye_points[1]), facial_landmarks.part(eye_points[2]))
-    center_bottom = midpoint(facial_landmarks.part(eye_points[5]), facial_landmarks.part(eye_points[4]))
+def get_blinking_ratio(landmarks, eye_indices, w, h):
+    points = []
 
-    hor_line_lenght = hypot((left_point[0] - right_point[0]), (left_point[1] - right_point[1]))
-    ver_line_lenght = hypot((center_top[0] - center_bottom[0]), (center_top[1] - center_bottom[1]))
+    for idx in eye_indices:
+        x = int(landmarks[idx].x * w)
+        y = int(landmarks[idx].y * h)
+        points.append((x, y))
 
-    ratio = hor_line_lenght / ver_line_lenght
-    return ratio
+    left_point = points[0]
+    right_point = points[3]
+    center_top = points[1]
+    center_bottom = points[5]
+
+    hor = hypot(left_point[0] - right_point[0],
+                left_point[1] - right_point[1])
+
+    ver = hypot(center_top[0] - center_bottom[0],
+                center_top[1] - center_bottom[1])
+
+    if ver == 0:
+        return 0
+
+    return hor / ver
+
+
+blink_threshold = 5.0
+sound_cooldown = 1.0  # seconds
+last_sound_time = 0
+
+print("Press 'q' to quit")
 
 while True:
-    success,img = cap.read()
-    imgGray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-    faces = detector(imgGray)
-
-    for face in faces:
-        landmarks = predictor(imgGray,face)
-        left_eye_ratio = get_blinking_ratio([36, 37, 38, 39, 40, 41], landmarks)
-        right_eye_ratio = get_blinking_ratio([42, 43, 44, 45, 46, 47], landmarks)
-        blinking_ratio = (left_eye_ratio + right_eye_ratio) / 2
-
-        if blinking_ratio > 5.0:
-            cv2.putText(img,"Blinking",(20,50),cv2.FONT_HERSHEY_COMPLEX,1,(0,255,0),2)
-
-    
-    cv2.imshow('Facial Landmark Detection',img)
-    if cv2.waitKey(1) & 0xff==ord('q'):
+    success, img = cap.read()
+    if not success:
         break
+
+    img = cv2.flip(img, 1)
+    h, w, _ = img.shape
+
+    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    results = face_mesh.process(rgb)
+
+    blink_detected = False
+
+    if results.multi_face_landmarks:
+        for face_landmarks in results.multi_face_landmarks:
+
+            landmarks = face_landmarks.landmark
+
+            left_eye = [33, 160, 158, 133, 153, 144]
+            right_eye = [362, 385, 387, 263, 373, 380]
+
+            left_ratio = get_blinking_ratio(landmarks, left_eye, w, h)
+            right_ratio = get_blinking_ratio(landmarks, right_eye, w, h)
+
+            ratio = (left_ratio + right_ratio) / 2
+
+            if ratio > blink_threshold:
+                blink_detected = True
+
+    current_time = time.time()
+
+    if blink_detected:
+        # -------- Play Sound (macOS) --------
+        if current_time - last_sound_time > sound_cooldown:
+            os.system("afplay /System/Library/Sounds/Ping.aiff &")
+            last_sound_time = current_time
+
+        # -------- Dark Overlay --------
+        overlay = img.copy()
+        cv2.rectangle(overlay, (0, 0), (w, h), (0, 0, 0), -1)
+        img = cv2.addWeighted(overlay, 0.6, img, 0.4, 0)
+
+        text = "BLINKING"
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 3
+        thickness = 6
+
+        text_size = cv2.getTextSize(text, font, font_scale, thickness)[0]
+        text_x = (w - text_size[0]) // 2
+        text_y = (h + text_size[1]) // 2
+
+        cv2.putText(img, text,
+                    (text_x, text_y),
+                    font,
+                    font_scale,
+                    (0, 255, 0),
+                    thickness)
+
+    cv2.imshow("Blink Detection", img)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()

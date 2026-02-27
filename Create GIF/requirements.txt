@@ -1,0 +1,3 @@
+opencv-python==4.8.1.78
+imageio>=2.31
+numpy>=1.23

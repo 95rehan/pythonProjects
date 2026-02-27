@@ -1,30 +1,50 @@
-# import cv2
-# import mediapipe as mp
+import cv2
+import mediapipe as mp
 
-# cap = cv2.VideoCapture(0)
+# ---------------- Face Mesh Setup ----------------
+cap = cv2.VideoCapture(0)
 
-# mpFaceMesh = mp.solutions.face_mesh
-# faceMesh = mpFaceMesh.FaceMesh()
-# mpDraw = mp.solutions.drawing_utils
-# drawing_specs = mpDraw.DrawingSpec(thickness=1,circle_radius=1)
+if not cap.isOpened():
+    print("Camera not detected")
+    exit()
 
-# while True:
-#     success,img = cap.read()
-#     if not success:
-#         break
-#     imgRGB = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
-#     results = faceMesh.process(imgRGB)
+mp_face_mesh = mp.solutions.face_mesh
+face_mesh = mp_face_mesh.FaceMesh(
+    max_num_faces=1,
+    refine_landmarks=True,
+    min_detection_confidence=0.7,
+    min_tracking_confidence=0.7
+)
 
-#     if results.multi_face_landmarks:
-#         for facelandmark in results.multi_face_landmarks:
-#             mpDraw.draw_landmarks(img,facelandmark,mpFaceMesh.FACE_CONNECTIONS,drawing_specs,drawing_specs)
-#     cv2.imshow('Image',img)
-#     if cv2.waitKey(1) & 0xff==ord('q'):
-#         break
+mp_draw = mp.solutions.drawing_utils
+drawing_spec = mp_draw.DrawingSpec(thickness=1, circle_radius=1)
 
-i =1
+print("Face Mesh Started. Press 'q' to quit.")
+
+# ---------------- Camera Loop ----------------
 while True:
-    if i%7==0:
+    success, img = cap.read()
+    if not success:
         break
-    print(i)
-    i+=1
+
+    img = cv2.flip(img, 1)
+    imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    results = face_mesh.process(imgRGB)
+
+    if results.multi_face_landmarks:
+        for face_landmarks in results.multi_face_landmarks:
+            mp_draw.draw_landmarks(
+                img,
+                face_landmarks,
+                mp_face_mesh.FACEMESH_TESSELATION,
+                drawing_spec,
+                drawing_spec
+            )
+
+    cv2.imshow("Face Mesh", img)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
