@@ -43,7 +43,7 @@ def getAngle(points):
 
 
 def click_event(event, x, y, flags, params):
-    global points, img
+    img
 
     if event == cv2.EVENT_LBUTTONDOWN:
 
