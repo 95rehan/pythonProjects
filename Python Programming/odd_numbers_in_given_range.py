@@ -6,6 +6,7 @@
 start = 4  
 end = 15
 
-for i in range(start,end+1):
-    if i % 2 != 0:
-        print(i)
+def gen_odd(start : int , end : int)-> list:
+    return [x for x in range(start, end) if x %2 != 0]
+
+gen_odd(start, end)

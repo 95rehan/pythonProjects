@@ -1,10 +1,8 @@
 # Python program to reveres a integer in  python
 
+sample_input = 12345
 
-a  = 123456
+def reverse_int(number : int) -> int:
+    return int(str(number)[::-1])
 
-
-b = [x for x in str(a)]
-c = int("".join(b[::-1]))
-
-print(c)
+reverse_int(sample_input)

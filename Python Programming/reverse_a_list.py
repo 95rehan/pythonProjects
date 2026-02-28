@@ -1,14 +1,10 @@
 # Python program to reverse a list
 
 
-a  = [2,3,4,9,4,5]
+sample_list = [2,3,4,9,4,5]
 
-b = []
-le = -1
+def reverse_list(lst : list) -> list:
+    return lst[::-1]
 
-for i in a:
-    b.append(a[le])
-    le+=1
-    
-print(b)
-    
+
+reverse_list(sample_list)
